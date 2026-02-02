@@ -1,0 +1,537 @@
+.model small
+.stack 100h
+
+.data
+    max_rec         db 10
+    count           dw 0            
+    
+    id_arr          dw 10 dup(0)    
+    mem_arr         dw 10 dup(0)    
+    wat_arr         dw 10 dup(0)    
+    flr_arr         dw 10 dup(0)    
+    pul_arr         dw 10 dup(0)    
+    
+    name_arr        db 150 dup('$') 
+
+    m_menu          db 13, 10, 13, 10, '--- REMOTE AREA DATABASE ---'
+                    db 13, 10, '1. Add Record'
+                    db 13, 10, '2. View Record by ID'
+                    db 13, 10, '3. Update Record'
+                    db 13, 10, '4. Display Totals'
+                    db 13, 10, '5. Sort (by Water)'
+                    db 13, 10, '6. View All Records'
+                    db 13, 10, '7. Exit'
+                    db 13, 10, 'Choice: $'
+    
+    m_id            db 13, 10, 'Enter ID: $'
+    m_name          db 13, 10, 'Enter Name: $'
+    m_mem           db 13, 10, 'Family Members: $'
+    m_wat           db 13, 10, 'Water (L): $'
+    m_flr           db 13, 10, 'Floor (kg): $'
+    m_pul           db 13, 10, 'Pulses (kg): $'
+    
+    m_disp_id       db 13, 10, 'ID: $'
+    m_disp_nm       db '  Name: $'
+    m_disp_w        db '  Wat: $'
+    m_separator     db 13, 10, '----------------------------------$'
+    m_empty         db 13, 10, 'Database is Empty.$'
+    
+    m_dup           db 13, 10, 'Error: ID exists!$'
+    m_not_found     db 13, 10, 'Error: ID Not Found!$'
+    m_full          db 13, 10, 'Error: DB Full!$'
+    m_exit          db 13, 10, 'Exiting...$'
+    m_success       db 13, 10, 'Saved.$'
+    m_updating      db 13, 10, '--- Enter New Data ---$'
+    
+    m_tot_w         db 13, 10, 'Total Water: $'
+    m_tot_f         db 13, 10, 'Total Floor: $'
+    m_tot_p         db 13, 10, 'Total Pulses: $'
+    
+    name_in         db 14, ?, 14 dup('$') 
+
+.code
+main proc
+    mov ax, @data
+    mov ds, ax
+
+start:
+    lea dx, m_menu
+    mov ah, 09h
+    int 21h
+    
+    mov ah, 01h
+    int 21h
+    sub al, 30h
+    
+    cmp al, 1
+    je do_add
+    cmp al, 2
+    je do_view_id
+    cmp al, 3
+    je do_update
+    cmp al, 4
+    je do_total
+    cmp al, 5
+    je do_sort
+    cmp al, 6
+    je do_view_all
+    cmp al, 7
+    je do_exit
+    jmp start
+
+do_add:
+    call ADD_RECORD
+    jmp start
+do_view_id:
+    call VIEW_RECORD_ID
+    jmp start
+do_update:
+    call UPDATE_RECORD
+    jmp start
+do_total:
+    call SHOW_TOTALS
+    jmp start
+do_sort:
+    call SORT_BY_WATER
+    jmp start
+do_view_all:
+    call VIEW_ALL_RECORDS
+    jmp start
+
+do_exit:
+    lea dx, m_exit
+    mov ah, 09h
+    int 21h
+    mov ah, 4ch
+    int 21h
+main endp
+
+ADD_RECORD proc
+    mov ax, count
+    cmp al, max_rec
+    jae full_err
+    
+    lea dx, m_id
+    mov ah, 09h
+    int 21h
+    call INPUT_NUM
+    mov bx, ax
+    
+    call CHECK_DUP
+    jnc dup_err
+    
+    mov di, count
+    shl di, 1
+    mov id_arr[di], bx
+    
+    lea dx, m_name
+    mov ah, 09h
+    int 21h
+    
+    lea dx, name_in
+    mov ah, 0Ah
+    int 21h
+    
+    mov ax, count
+    mov bx, 15
+    mul bx
+    mov di, ax
+    
+    lea si, name_in + 2
+    mov cl, name_in + 1
+    xor ch, ch
+    
+    cmp cl, 0
+    je skip_copy
+    
+    copy_lp:
+        mov al, [si]
+        mov name_arr[di], al
+        inc si
+        inc di
+        loop copy_lp
+        
+skip_copy:
+    lea dx, m_mem
+    mov ah, 09h
+    int 21h
+    call INPUT_NUM
+    mov di, count
+    shl di, 1
+    mov mem_arr[di], ax
+    
+    lea dx, m_wat
+    mov ah, 09h
+    int 21h
+    call INPUT_NUM
+    mov di, count
+    shl di, 1
+    mov wat_arr[di], ax
+
+    lea dx, m_flr
+    mov ah, 09h
+    int 21h
+    call INPUT_NUM
+    mov di, count
+    shl di, 1
+    mov flr_arr[di], ax
+    
+    lea dx, m_pul
+    mov ah, 09h
+    int 21h
+    call INPUT_NUM
+    mov di, count
+    shl di, 1
+    mov pul_arr[di], ax
+    
+    inc count
+    lea dx, m_success
+    mov ah, 09h
+    int 21h
+    ret
+
+full_err:
+    lea dx, m_full
+    mov ah, 09h
+    int 21h
+    ret
+dup_err:
+    lea dx, m_dup
+    mov ah, 09h
+    int 21h
+    ret
+ADD_RECORD endp
+
+VIEW_ALL_RECORDS proc
+    mov cx, count
+    cmp cx, 0
+    je is_empty
+    
+    mov si, 0
+    
+view_loop:
+    push cx
+    
+    lea dx, m_disp_id
+    mov ah, 09h
+    int 21h
+    mov ax, id_arr[si]
+    call PRINT_NUM
+    
+    lea dx, m_disp_nm
+    mov ah, 09h
+    int 21h
+    call PRINT_NAME_AT_INDEX
+    
+    lea dx, m_disp_w
+    mov ah, 09h
+    int 21h
+    mov ax, wat_arr[si]
+    call PRINT_NUM
+    
+    lea dx, m_separator
+    mov ah, 09h
+    int 21h
+    
+    add si, 2
+    pop cx
+    loop view_loop
+    
+    ret
+
+is_empty:
+    lea dx, m_empty
+    mov ah, 09h
+    int 21h
+    ret
+VIEW_ALL_RECORDS endp
+
+VIEW_RECORD_ID proc
+    lea dx, m_id
+    mov ah, 09h
+    int 21h
+    
+    call INPUT_NUM
+    mov bx, ax
+    
+    call CHECK_DUP
+    jc not_found_view
+    
+    lea dx, m_disp_id
+    mov ah, 09h
+    int 21h
+    mov ax, id_arr[si]
+    call PRINT_NUM
+    
+    lea dx, m_disp_nm
+    mov ah, 09h
+    int 21h
+    call PRINT_NAME_AT_INDEX
+
+    lea dx, m_wat
+    mov ah, 09h
+    int 21h
+    mov ax, wat_arr[si]
+    call PRINT_NUM
+    
+    lea dx, m_flr
+    mov ah, 09h
+    int 21h
+    mov ax, flr_arr[si]
+    call PRINT_NUM
+
+    lea dx, m_pul
+    mov ah, 09h
+    int 21h
+    mov ax, pul_arr[si]
+    call PRINT_NUM
+    ret
+
+not_found_view:
+    lea dx, m_not_found
+    mov ah, 09h
+    int 21h
+    ret
+VIEW_RECORD_ID endp
+
+UPDATE_RECORD proc
+    lea dx, m_id
+    mov ah, 09h
+    int 21h
+    
+    call INPUT_NUM
+    mov bx, ax
+    
+    call CHECK_DUP
+    jc not_found_view
+    
+    lea dx, m_updating
+    mov ah, 09h
+    int 21h
+    
+    lea dx, m_mem
+    mov ah, 09h
+    int 21h
+    call INPUT_NUM
+    mov mem_arr[si], ax
+    
+    lea dx, m_wat
+    mov ah, 09h
+    int 21h
+    call INPUT_NUM
+    mov wat_arr[si], ax
+    
+    lea dx, m_flr
+    mov ah, 09h
+    int 21h
+    call INPUT_NUM
+    mov flr_arr[si], ax
+    
+    lea dx, m_pul
+    mov ah, 09h
+    int 21h
+    call INPUT_NUM
+    mov pul_arr[si], ax
+    
+    lea dx, m_success
+    mov ah, 09h
+    int 21h
+    ret
+UPDATE_RECORD endp
+
+PRINT_NAME_AT_INDEX proc
+    push ax
+    push bx
+    push cx
+    push dx
+    push di
+    
+    mov ax, si
+    shr ax, 1
+    mov bx, 15
+    mul bx
+    mov di, ax
+    
+    mov cx, 15
+    lea bx, name_arr
+    add bx, di
+print_nm_lp:
+    mov dl, [bx]
+    cmp dl, '$'
+    je end_nm_prt
+    mov ah, 02h
+    int 21h
+    inc bx
+    loop print_nm_lp
+end_nm_prt:
+    pop di
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+PRINT_NAME_AT_INDEX endp
+
+CHECK_DUP proc
+    mov cx, count
+    cmp cx, 0
+    je not_found_dup
+    mov si, 0
+check_loop:
+    cmp id_arr[si], bx
+    je found_dup
+    add si, 2
+    loop check_loop
+not_found_dup:
+    stc
+    ret
+found_dup:
+    clc
+    ret
+CHECK_DUP endp
+
+INPUT_NUM proc
+    push bx
+    push cx
+    push dx
+    xor bx, bx
+input_lp:
+    mov ah, 01h
+    int 21h
+    cmp al, 13
+    je input_done
+    cmp al, '0'
+    jb input_lp
+    cmp al, '9'
+    ja input_lp
+    sub al, 30h
+    xor ah, ah
+    mov cx, ax
+    mov ax, bx
+    mov dx, 10
+    mul dx
+    add ax, cx
+    mov bx, ax
+    jmp input_lp
+input_done:
+    mov ax, bx
+    pop dx
+    pop cx
+    pop bx
+    ret
+INPUT_NUM endp
+
+PRINT_NUM proc
+    push ax
+    push bx
+    push cx
+    push dx
+    xor cx, cx
+    mov bx, 10
+div_lp:
+    xor dx, dx
+    div bx
+    push dx
+    inc cx
+    cmp ax, 0
+    jne div_lp
+prt_lp:
+    pop dx
+    add dl, 30h
+    mov ah, 02h
+    int 21h
+    loop prt_lp
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+PRINT_NUM endp
+
+SHOW_TOTALS proc
+    lea dx, m_tot_w
+    mov ah, 09h
+    int 21h
+    mov cx, count
+    cmp cx, 0
+    je end_tot
+    mov si, 0
+    xor ax, ax
+sum_w:
+    add ax, wat_arr[si]
+    add si, 2
+    loop sum_w
+    call PRINT_NUM
+    
+    lea dx, m_tot_f
+    mov ah, 09h
+    int 21h
+    mov cx, count
+    mov si, 0
+    xor ax, ax
+sum_f:
+    add ax, flr_arr[si]
+    add si, 2
+    loop sum_f
+    call PRINT_NUM
+    
+    lea dx, m_tot_p
+    mov ah, 09h
+    int 21h
+    mov cx, count
+    mov si, 0
+    xor ax, ax
+sum_p:
+    add ax, pul_arr[si]
+    add si, 2
+    loop sum_p
+    call PRINT_NUM
+end_tot:
+    ret
+SHOW_TOTALS endp
+
+SORT_BY_WATER proc
+    mov cx, count
+    dec cx
+    cmp cx, 0
+    jle sort_exit
+outer:
+    push cx
+    mov si, 0
+inner:
+    mov ax, wat_arr[si]
+    cmp ax, wat_arr[si+2]
+    jle no_swap
+    
+    mov bx, wat_arr[si+2]
+    mov wat_arr[si+2], ax
+    mov wat_arr[si], bx
+    mov ax, id_arr[si]
+    mov bx, id_arr[si+2]
+    mov id_arr[si], bx
+    mov id_arr[si+2], ax
+    mov ax, mem_arr[si]
+    mov bx, mem_arr[si+2]
+    mov mem_arr[si], bx
+    mov mem_arr[si+2], ax
+    mov ax, flr_arr[si]
+    mov bx, flr_arr[si+2]
+    mov flr_arr[si], bx
+    mov flr_arr[si+2], ax
+    mov ax, pul_arr[si]
+    mov bx, pul_arr[si+2]
+    mov pul_arr[si], bx
+    mov pul_arr[si+2], ax
+no_swap:
+    add si, 2
+    loop inner
+    pop cx
+    loop outer
+    lea dx, m_success
+    mov ah, 09h
+    int 21h
+sort_exit:
+    ret
+SORT_BY_WATER endp
+
+end main
