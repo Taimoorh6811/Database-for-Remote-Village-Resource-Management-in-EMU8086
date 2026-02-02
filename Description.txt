@@ -1,0 +1,1 @@
+A menu-driven Remote Area Database System built in 8086 Assembly Language using DOS interrupts. The program manages household records including ID, name, family members, and resource consumption (water, flour, pulses). Features include add, view, update, sort, totals calculation, and error handling using low-level memory management.
